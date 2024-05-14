@@ -6,7 +6,7 @@ import matplotlib.patches as mpatches
 
 from scipy.stats import norm
 
-from recons_PWF import R2D
+from constants import R2D
     
 def _NLLmap(theta_range, phi_range, theta, phi, estimate_covar, n=100):
     thetas,phis = np.mgrid[theta_range[0]:theta_range[1]:n*1j, phi_range[0]:phi_range[1]:n*1j]

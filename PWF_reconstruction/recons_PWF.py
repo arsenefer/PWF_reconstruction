@@ -1,19 +1,9 @@
+from constants import *
 import numpy as np
 import time
 from scipy.optimize import brentq
 import scipy.optimize as so
 import numdifftools as nd
-
-# Defining constants
-R2D = 180/np.pi
-# Physical constants
-c_light = 2.997924580e8
-#Constant for variable index
-R_earth = 6371007.0
-ns = 325
-kr = -0.1218
-groundAltitude = 1086.0
-shower_core = np.array([0,0,groundAltitude])
 
 
 def ZHSEffectiveRefractionIndex(X0,Xa):
