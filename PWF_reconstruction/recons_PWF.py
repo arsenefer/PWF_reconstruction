@@ -5,7 +5,6 @@ from scipy.optimize import brentq
 import scipy.optimize as so
 import numdifftools as nd
 
-
 def ZHSEffectiveRefractionIndex(X0,Xa):
     """Compute mean refraction index along trajectory for antenna at Xa and source at X0"""
     R02 = X0[0]**2 + X0[1]**2
