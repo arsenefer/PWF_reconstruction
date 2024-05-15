@@ -1,4 +1,4 @@
-from constants import *
+from .utils import *
 import numpy as np
 import time
 from scipy.optimize import brentq
@@ -272,7 +272,7 @@ def fisher_Variance(theta_pred, phi_pred, Xants, sigma, c=1., cr=1.):
 
 ##Gradient descent
 def cov_matrix(theta_pred, phi_pred, Xants, sigma, c=1., cr=1.):
-    return fisher_Variance(theta_pred, phi_pred, Xants, sigma, c=1., cr=1.)
+    return Covariance_tangentplane(theta_pred, phi_pred, Xants, sigma, c=c, cr=cr)
 
 def PWF_loss(params, Xants, tants, verbose=False, cr=1.0):
     '''
