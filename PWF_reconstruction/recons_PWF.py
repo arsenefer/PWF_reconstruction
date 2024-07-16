@@ -5,126 +5,6 @@ import scipy.optimize as so
 import numdifftools as nd
 
 
-def ZHSEffectiveRefractionIndex(X0, Xa):
-    """Compute mean refraction index along trajectory for antenna at Xa and source at X0"""
-    R02 = X0[0]**2 + X0[1]**2
-
-    # Altitude of emission in km
-    h0 = (np.sqrt((X0[2]+R_earth)**2 + R02) - R_earth)/1e3
-    # print('Altitude of emission in km = ',h0)
-    # print(h0)
-
-    # Refractivity at emission
-    rh0 = ns*np.exp(kr*h0)
-
-    modr = np.sqrt(R02)
-    # print(modr)
-
-    if (modr > 1e3):
-
-        # Vector between antenna and emission point
-        U = Xa-X0
-        # Divide into pieces shorter than 10km
-        # nint = np.int(modr/2e4)+1
-        nint = int(modr/2e4)+1
-        K = U/nint
-
-        # Current point coordinates and altitude
-        Curr = X0
-        currh = h0
-        s = 0.
-
-        for i in np.arange(nint):
-            Next = Curr + K  # Next point
-            nextR2 = Next[0]*Next[0] + Next[1]*Next[1]
-            nexth = (np.sqrt((Next[2]+R_earth)**2 + nextR2) - R_earth)/1e3
-            if (np.abs(nexth-currh) > 1e-10):
-                s += (np.exp(kr*nexth)-np.exp(kr*currh))/(kr*(nexth-currh))
-            else:
-                s += np.exp(kr*currh)
-
-            Curr = Next
-            currh = nexth
-            # print (currh)
-
-        avn = ns*s/nint
-        # print(avn)
-        n_eff = 1. + 1e-6*avn  # Effective (average) index
-
-    else:
-
-        # without numerical integration
-        hd = Xa[2]/1e3  # Antenna altitude
-        # if (np.abs(hd-h0) > 1e-10):
-        avn = (ns/(kr*(hd-h0)))*(np.exp(kr*hd)-np.exp(kr*h0))
-        # else:
-        #    avn = ns*np.exp(kr*h0)
-
-        n_eff = 1. + 1e-6*avn  # Effective (average) index
-
-    return (n_eff)
-
-
-def ZHSEffectiveRefractionIndexvect(X0, Xa):
-    """Same as previous but with a vector of antenna position Xa (N*3)"""
-    R02 = X0[0]**2 + X0[1]**2
-
-    # Altitude of emission in km
-    h0 = (np.sqrt((X0[2]+R_earth)**2 + R02) - R_earth)/1e3
-    # print('Altitude of emission in km = ',h0)
-    # print(h0)
-
-    # Refractivity at emission
-    rh0 = ns*np.exp(kr*h0)
-
-    modr = np.sqrt(R02)
-    # print(modr)
-
-    if (modr > 1e3):
-
-        # Vector between antenna and emission point
-        U = Xa-X0
-        # Divide into pieces shorter than 10km
-        # nint = np.int(modr/2e4)+1
-        nint = int(modr/2e4)+1
-        K = U/nint
-
-        # Current point coordinates and altitude
-        Curr = X0
-        currh = h0
-        s = np.zeros(Xa.shape[0])
-
-        for i in np.arange(nint):
-            Next = Curr + K  # Next point
-            nextR2 = Next[:, 0]*Next[:, 0] + Next[:, 1]*Next[:, 1]
-            nexth = (np.sqrt((Next[:, 2]+R_earth)**2 + nextR2) - R_earth)/1e3
-            mask = np.abs(nexth-currh) > 1e-10
-            s[mask] += (np.exp(kr*nexth[mask])-np.exp(kr*currh)) / \
-                (kr*(nexth[mask]-currh))
-            s[1-mask] += np.exp(kr*currh)
-
-            Curr = Next
-            currh = nexth
-            # print (currh)
-
-        avn = ns*s/nint
-        # print(avn)
-        n_eff = 1. + 1e-6*avn  # Effective (average) index
-
-    else:
-
-        # without numerical integration
-        hd = Xa[:, 2]/1e3  # Antenna altitude
-        # if (np.abs(hd-h0) > 1e-10):
-        avn = (ns/(kr*(hd-h0)))*(np.exp(kr*hd)-np.exp(kr*h0))
-        # else:
-        #    avn = ns*np.exp(kr*h0)
-
-        n_eff = 1. + 1e-6*avn  # Effective (average) index
-
-    return (n_eff)
-
-
 def Linear_solver(Xants, tants, cr=1., c=1.):
     """
     Given Xants in meters, tants in seconds cr the indices of refraction (vector or constant) 
@@ -134,7 +14,7 @@ def Linear_solver(Xants, tants, cr=1., c=1.):
     t_ants = (c/cr * (tants-tants.mean()))[:, None]
     P_1 = (Xants-Xants.mean(axis=0))
 
-    pseudoinverse = np.linalg.inv(P_1.T@P_1)
+    pseudoinverse = np.linalg.pinv(P_1.T@P_1)
     M = pseudoinverse @ P_1.T
     res = M @ t_ants
     return res.flatten(), pseudoinverse
@@ -193,6 +73,7 @@ def PWF_semianalytical(Xants, tants, verbose=False, cr=1.0, c=1.):
               tants.shape, Xants.shape)
         return None
     # Compute A matrix (3x3) and b (3-)vector, see above
+    # print(cr)
     tants_cor = tants*c/cr
     PXT = Xants - Xants.mean(axis=0)  # P is the centering projector, XT=Xants
     A = np.dot(Xants.T, PXT)
@@ -252,9 +133,9 @@ def Covariance_tangentplane(theta_pred, phi_pred, Xants, sigma, c=1., cr=1.):
     """
     Xants_cor = (Xants-Xants.mean(axis=0)
                  [None, :])/(c/np.array(cr).reshape(-1, 1))
-    Sigma = (sigma)**2*np.linalg.inv(Xants_cor.T @ Xants_cor)
+    Sigma = (sigma)**2*np.linalg.pinv(Xants_cor.T @ Xants_cor)
 
-    Q = np.linalg.inv(np.array([[-np.sin(theta_pred)*np.cos(phi_pred), -np.cos(theta_pred)*np.cos(phi_pred), np.sin(theta_pred)*np.sin(phi_pred)],
+    Q = np.linalg.pinv(np.array([[-np.sin(theta_pred)*np.cos(phi_pred), -np.cos(theta_pred)*np.cos(phi_pred), np.sin(theta_pred)*np.sin(phi_pred)],
                                 [-np.sin(theta_pred)*np.sin(phi_pred), -np.cos(theta_pred)*np.sin(phi_pred), -np.sin(theta_pred)*np.cos(phi_pred)],
                                 [-np.cos(theta_pred),            np.sin(theta_pred),         0]]))
     QSigQt = Q @ Sigma @ Q.T
@@ -283,13 +164,13 @@ def fisher_Variance(theta_pred, phi_pred, Xants, sigma, c=1., cr=1.):
     Xants_cor = (Xants-Xants.mean(axis=0)
                  [None, :])/(c/np.array(cr).reshape(-1, 1))
 
-    return np.linalg.inv(B.T @ Xants_cor.T @ Xants_cor @ B)*(sigma**2)
-
-# Gradient descent
-
+    return np.linalg.pinv(B.T @ Xants_cor.T @ Xants_cor @ B)*(sigma**2)
 
 def cov_matrix(theta_pred, phi_pred, Xants, sigma, c=1., cr=1.):
     return Covariance_tangentplane(theta_pred, phi_pred, Xants, sigma, c=c, cr=cr)
+
+# Gradient descent
+
 
 
 def PWF_loss(params, Xants, tants, verbose=False, cr=1.0):
@@ -328,32 +209,18 @@ def PWF_loss(params, Xants, tants, verbose=False, cr=1.0):
     return (chi2)
 
 
-def PWF_gradient(Xants, tants, cr=1.0, c=1., compute_errors=False):
+def PWF_gradient(Xants, tants, cr=1.0, c=1.):
 
     bounds = ((np.pi/2+1e-7, np.pi), (0, 2*np.pi))
     params_in = np.array(bounds).mean(axis=1)
 
     args = (Xants, tants*c/cr)
-    res = so.minimize(PWF_loss, params_in, args=args, method='BFGS')
-    res = so.minimize(PWF_loss, params_in, args=args,
-                      method='L-BFGS-B', bounds=bounds)
 
     res = so.minimize(PWF_loss, params_in, args=args,
                       bounds=bounds, method='BFGS')
-    # res = so.minimize(PWF_loss,params_in, args=(*params_in,1,True),method='L-BFGS-B', bounds=bounds)
 
     params_out = res.x
-    # compute errors with numerical estimate of Hessian matrix, inversion and sqrt of diagonal terms
-    if (compute_errors):
-        hess = nd.Hessian(PWF_loss)(params_out, *args)
-        errors = np.sqrt(np.diag(np.linalg.inv(hess)))
-        print("Best fit parameters = ", np.rad2deg(params_out))
 
-        # Errors computation needs work: errors are coming both from noise on amplitude and time measurements
-        print("Errors on parameters (from Hessian) = ", np.rad2deg(errors))
-        print("Chi2 at best fit = ", PWF_loss(params_out, *args))
-    # params_out[0] = np.pi - params_out[0]
-    # params_out[1] += np.pi
     params_out = params_out % (2*np.pi)
     if params_out[0] > np.pi:
         params_out[0] = 2*np.pi-params_out[0]
