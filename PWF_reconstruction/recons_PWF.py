@@ -1,20 +1,27 @@
-from .utils import R_earth, R2D, ns, kr
+from .utils import R_earth, R2D, ns, kr, c_light, n_atm
 import numpy as np
 from scipy.optimize import brentq
 import scipy.optimize as so
 import numdifftools as nd
 
 
-def Linear_solver(Xants, tants, cr=1., c=1.):
+def Linear_solver(Xants, tants, c=c_light, n=n_atm):
     """
-    Given Xants in meters, tants in seconds cr the indices of refraction (vector or constant) 
-    and c the speed of light (should be 3e8 but can be 1 if tants in meters)
-    Computes the unconstraint best fit for k
-    """
-    t_ants = (c/cr * (tants-tants.mean()))[:, None]
-    P_1 = (Xants-Xants.mean(axis=0))
+    Solve for the best-fit vector k given antenna positions and arrival times.
 
-    pseudoinverse = np.linalg.pinv(P_1.T@P_1)
+    Parameters:
+    Xants (ndarray): Antenna positions in meters, shape (nants, 3).
+    tants (ndarray): Antenna arrival times in seconds, shape (nants,).
+    c (float): Speed of light in m/s, default is  299792458 m/s
+    n (float or ndarray): Indices of refraction (vector or constant), default is 1.000136
+
+    Returns:
+    tuple: Best-fit vector k (ndarray) and the pseudoinverse of the design matrix (ndarray).
+    """
+    t_ants = (c/n * (tants - tants.mean()))[:, None]
+    P_1 = (Xants - Xants.mean(axis=0))
+
+    pseudoinverse = np.linalg.pinv(P_1.T @ P_1)
     M = pseudoinverse @ P_1.T
     res = M @ t_ants
     return res.flatten(), pseudoinverse
@@ -22,169 +29,195 @@ def Linear_solver(Xants, tants, cr=1., c=1.):
 
 def _projector(k, Inv):
     """
-    Given a vector k and the inverse of covariance matrix. Compute projection on unit sphere along large axis of distribution.
+    Compute the projection of vector k on the unit sphere along the largest axis of distribution.
+
+    Parameters:
+    k (ndarray): Vector to be projected, shape (3,).
+    Inv (ndarray): Inverse of the covariance matrix, shape (3, 3).
+
+    Returns:
+    ndarray: Projected vector on the unit sphere, shape (3,).
     """
     d, R = np.linalg.eigh(Inv)
-    # R = R[:,::-1]
-    directions = R[:, -1]@np.array([[0.], [0], [1]])
+    directions = R[:, -1] @ np.array([[0.], [0], [1]])
     R[:, -1] *= np.sign(directions).T
 
     k_lin_rot = R.T @ k
     n2 = np.linalg.norm(k_lin_rot[:2])
     k_opt_rot = np.array(
-        [*(k_lin_rot[:2]/max(1, n2)), - np.sqrt(1 - min(1, n2**2))])
+        [*(k_lin_rot[:2] / max(1, n2)), -np.sqrt(1 - min(1, n2**2))])
 
     k_opt = R @ k_opt_rot
     return k_opt
 
 
-def PWF_projection(Xants, tants, verbose=False, cr=1.0, c=1.):
-    '''
-    Given Xants in meters, tants in seconds cr the indices of refraction (vector or constant) 
-    and c the speed of light (should be 3e8 but can be 1 if tants in meters)
-    Computes the projection of k on the unit sphere along large axis of distribution. Approx C. Best approximation.
-    Returns theta and phi
-    '''
+def PWF_projection(Xants, tants, c=c_light, n=n_atm):
+    """
+    Compute the projection of k on the unit sphere along the largest axis of distribution.
 
-    k_lin, Inv = Linear_solver(Xants, tants, cr=cr, c=c)
+    Parameters:
+    Xants (ndarray): Antenna positions in meters, shape (nants, 3).
+    tants (ndarray): Antenna arrival times in seconds, shape (nants,).
+    c (float): Speed of light in m/s, default is  299792458 m/s
+    n (float or ndarray): Indices of refraction (vector or constant), default is 1.000136
+
+    Returns:
+    tuple: Theta and phi angles in radians.
+    """
+    k_lin, Inv = Linear_solver(Xants, tants, c=c, n=n)
     k_opt = _projector(k_lin, Inv)
-    # Now get angles from k_opt coordinates
 
     theta_opt = np.arccos(-k_opt[2])
     phi_opt = np.arctan2(-k_opt[1], -k_opt[0])
     return theta_opt, phi_opt
 
 
-def PWF_semianalytical(Xants, tants, verbose=False, cr=1.0, c=1.):
-    '''
-    Given Xants in meters, tants in seconds cr the indices of refraction (vector or constant) 
-    and c the speed of light (should be 3e8 but can be 1 if tants in meters)
+def PWF_semianalytical(Xants, tants, verbose=False, c=c_light, n=n_atm):
+    """
+    Solve the minimization problem using a semi-analytical approach.
 
-    Solves the minimization problem by using a special solution to the linear regression
-    on K(\theta,\phi), with the ||K||=1 constraint. Note that this is a non-convex problem.
-    This is formulated as 
-    argmin_k k^T.A.k - 2 b^T.k, s.t. ||k||=1
-    '''
+    Parameters:
+    Xants (ndarray): Antenna positions in meters, shape (nants, 3).
+    tants (ndarray): Antenna arrival times in seconds, shape (nants,).
+    verbose (bool): Verbose output, default is False.
+    c (float): Speed of light in m/s, default is  299792458 m/s
+    n (float or ndarray): Indices of refraction (vector or constant), default is 1.000136
+
+    Returns:
+    ndarray: Theta and phi angles in radians.
+    """
     nants = tants.shape[0]
-    # Make sure tants and Xants are compatible
 
     if (Xants.shape[0] != nants):
-        print("Shapes of tants and Xants are incompatible",
-              tants.shape, Xants.shape)
+        print("Shapes of tants and Xants are incompatible", tants.shape, Xants.shape)
         return None
-    # Compute A matrix (3x3) and b (3-)vector, see above
-    # print(cr)
-    tants_cor = tants*c/cr
-    PXT = Xants - Xants.mean(axis=0)  # P is the centering projector, XT=Xants
+
+    tants_cor = tants * c / n
+    PXT = Xants - Xants.mean(axis=0)
     A = np.dot(Xants.T, PXT)
-    b = np.dot(Xants.T, tants_cor-tants_cor.mean(axis=0))
-    # Diagonalize A, compute projections of b onto eigenvectors
+    b = np.dot(Xants.T, tants_cor - tants_cor.mean(axis=0))
     d, W = np.linalg.eigh(A)
     beta = np.dot(b, W)
     nbeta = np.linalg.norm(beta)
 
-    if (np.abs(beta[0]/nbeta) < 1e-14):
+    if (np.abs(beta[0] / nbeta) < 1e-14):
         if (verbose):
             print("Degenerate case")
-        # Degenerate case. This will be triggered e.g. when all antennas lie in a single plane.
         mu = -d[0]
-        c = np.zeros(3)
-        c[1] = beta[1]/(d[1]+mu)
-        c[2] = beta[2]/(d[2]+mu)
+        c_ = np.zeros(3)
+        c_[1] = beta[1] / (d[1] + mu)
+        c_[2] = beta[2] / (d[2] + mu)
         si = np.sign(np.dot(W[:, 0], np.array([0, 0, 1.])))
-        # Determined up to a sign: choose descending solution
-        c[0] = -si*np.sqrt(1-c[1]**2-c[2]**2)
-        k_opt = np.dot(W, c)
-        # k_opt[2] = -np.abs(k_opt[2]) # Descending solution
+        c_[0] = -si * np.sqrt(1 - c_[1]**2 - c_[2]**2)
+        k_opt = np.dot(W, c_)
 
     else:
-        # Assume non-degenerate case, i.e. projections on smallest eigenvalue are non zero
-        # Compute \mu such that \sum_i \beta_i^2/(\lambda_i+\mu)^2 = 1, using root finding on mu
         def nc(mu):
-            # Computes difference of norm of k solution to 1. Coordinates of k are \beta_i/(d_i+\mu) in W basis
-            c = beta/(d+mu)
-            return ((c**2).sum()-1.)
-        mu_min = -d[0]+beta[0]
-        mu_max = -d[0]+np.linalg.norm(beta)
+            c_ = beta / (d + mu)
+            return ((c_**2).sum() - 1.)
+        mu_min = -d[0] + beta[0]
+        mu_max = -d[0] + np.linalg.norm(beta)
         mu_opt = brentq(nc, mu_min, mu_max, maxiter=1000)
-        # Compute coordinates of k in W basis, return k
-        c = beta/(d+mu_opt)
-        k_opt = np.dot(W, c)
+        c_ = beta / (d + mu_opt)
+        k_opt = np.dot(W, c_)
 
-    # Now get angles from k_opt coordinates
     if k_opt[2] > 1e-2:
-        k_opt = k_opt-2*(k_opt@W[:, 0])*W[:, 0]
+        k_opt = k_opt - 2 * (k_opt @ W[:, 0]) * W[:, 0]
 
     theta_opt = np.arccos(-k_opt[2])
     phi_opt = np.arctan2(-k_opt[1], -k_opt[0])
 
     if phi_opt < 0:
-        phi_opt += 2*np.pi
-    return (np.array([theta_opt, phi_opt]))
+        phi_opt += 2 * np.pi
+    return np.array([theta_opt, phi_opt])
 
 
-def Covariance_tangentplane(theta_pred, phi_pred, Xants, sigma, c=1., cr=1.):
+def Covariance_tangentplane(theta_pred, phi_pred, Xants, sigma, c=c_light, n=n_atm):
     """
-    Given a prediction Xants in meters, cr the indices of refraction (vector or constant) 
-    and c the speed of light (should be 3e8 but can be 1 if tants in meters)
+    Compute the covariance matrix of theta and phi given predictions and antenna data.
 
-    Compute the covariance matrix of theta and phi
-    Method described in paper
+    Parameters:
+    theta_pred (float): Predicted theta angle in radians.
+    phi_pred (float): Predicted phi angle in radians.
+    Xants (ndarray): Antenna positions in meters, shape (nants, 3).
+    sigma (float): Standard deviation of arrival times.
+    c (float): Speed of light in m/s, default is  299792458 m/s
+    n (float or ndarray): Indices of refraction (vector or constant), default is 1.000136
+
+    Returns:
+    ndarray: Covariance matrix of theta and phi, shape (2, 2).
     """
-    Xants_cor = (Xants-Xants.mean(axis=0)
-                 [None, :])/(c/np.array(cr).reshape(-1, 1))
-    Sigma = (sigma)**2*np.linalg.pinv(Xants_cor.T @ Xants_cor)
+    Xants_cor = (Xants - Xants.mean(axis=0)[None, :]) / (c / np.array(n).reshape(-1, 1))
+    Sigma = (sigma)**2 * np.linalg.pinv(Xants_cor.T @ Xants_cor)
 
     Q = np.linalg.pinv(np.array([[-np.sin(theta_pred)*np.cos(phi_pred), -np.cos(theta_pred)*np.cos(phi_pred), np.sin(theta_pred)*np.sin(phi_pred)],
                                 [-np.sin(theta_pred)*np.sin(phi_pred), -np.cos(theta_pred)*np.sin(phi_pred), -np.sin(theta_pred)*np.cos(phi_pred)],
-                                [-np.cos(theta_pred),            np.sin(theta_pred),         0]]))
+                                [-np.cos(theta_pred), np.sin(theta_pred), 0]]))
     QSigQt = Q @ Sigma @ Q.T
 
     Sigma_aa = QSigQt[1:, 1:]
     Sigma_ar = QSigQt[0, 1:]
     Sigma_rr = QSigQt[0, 0]
-    Sigma_bar = Sigma_aa - 1/Sigma_rr * Sigma_ar[:, None] @ Sigma_ar[None, :]
+    Sigma_bar = Sigma_aa - 1 / Sigma_rr * Sigma_ar[:, None] @ Sigma_ar[None, :]
     return Sigma_bar
 
 
-def fisher_Variance(theta_pred, phi_pred, Xants, sigma, c=1., cr=1.):
+def fisher_Variance(theta_pred, phi_pred, Xants, sigma, c=c_light, n=n_atm):
     """
-    Given Xants in meters, tants in seconds cr the indices of refraction (vector or constant) 
-    and c the speed of light (should be 3e8 but can be 1 if tants in meters)
+    Compute the Fisher matrix variance for theta and phi given predictions and antenna data.
 
-    Same as previous but with fisher matrix approach
+    Parameters:
+    theta_pred (float): Predicted theta angle in radians.
+    phi_pred (float): Predicted phi angle in radians.
+    Xants (ndarray): Antenna positions in meters, shape (nants, 3).
+    sigma (float): Standard deviation of arrival times.
+    c (float): Speed of light in m/s, default is  299792458 m/s
+    n (float or ndarray): Indices of refraction (vector or constant), default is 1.000136
+
+    Returns:
+    ndarray: Fisher matrix variance, shape (2, 2).
     """
     B = np.array([
-        [-np.cos(theta_pred)*np.cos(phi_pred),
-         np.sin(theta_pred)*np.sin(phi_pred)],
-        [-np.cos(theta_pred)*np.sin(phi_pred), -
-         np.sin(theta_pred)*np.cos(phi_pred)],
-        [np.sin(theta_pred),                 0]
+        [-np.cos(theta_pred)*np.cos(phi_pred), np.sin(theta_pred)*np.sin(phi_pred)],
+        [-np.cos(theta_pred)*np.sin(phi_pred), -np.sin(theta_pred)*np.cos(phi_pred)],
+        [np.sin(theta_pred), 0]
     ])
-    Xants_cor = (Xants-Xants.mean(axis=0)
-                 [None, :])/(c/np.array(cr).reshape(-1, 1))
+    Xants_cor = (Xants - Xants.mean(axis=0)[None, :]) / (c / np.array(n).reshape(-1, 1))
 
-    return np.linalg.pinv(B.T @ Xants_cor.T @ Xants_cor @ B)*(sigma**2)
-
-def cov_matrix(theta_pred, phi_pred, Xants, sigma, c=1., cr=1.):
-    return Covariance_tangentplane(theta_pred, phi_pred, Xants, sigma, c=c, cr=cr)
-
-# Gradient descent
+    return np.linalg.pinv(B.T @ Xants_cor.T @ Xants_cor @ B) * (sigma**2)
 
 
+def cov_matrix(theta_pred, phi_pred, Xants, sigma, c=c_light, n=n_atm):
+    """
+    Wrapper for Covariance_tangentplane function.
 
-def PWF_loss(params, Xants, tants, verbose=False, cr=1.0):
-    '''
-    Defines Chi2 by summing model residuals
-    over antenna pairs (i,j):
-    loss = \sum_{i>j} ((Xants[i,:]-Xants[j,:]).K - cr(tants[i]-tants[j]))**2
-    where:
-    params=(theta, phi): spherical coordinates of unit shower direction vector K
-    Xants are the antenna positions (shape=(nants,3))
-    tants are the antenna arrival times of the wavefront (trigger time, shape=(nants,))
-    cr is radiation speed, by default 1 since time is expressed in m.
-    '''
+    Parameters:
+    theta_pred (float): Predicted theta angle in radians.
+    phi_pred (float): Predicted phi angle in radians.
+    Xants (ndarray): Antenna positions in meters, shape (nants, 3).
+    sigma (float): Standard deviation of arrival times.
+    c (float): Speed of light in m/s, default is  299792458 m/s
+    n (float or ndarray): Indices of refraction (vector or constant), default is 1.000136
 
+    Returns:
+    ndarray: Covariance matrix of theta and phi, shape (2, 2).
+    """
+    return Covariance_tangentplane(theta_pred, phi_pred, Xants, sigma, c=c, n=n)
+
+
+def PWF_loss(params, Xants, tants, verbose=False):
+    """
+    Define the Chi-squared loss function for antenna data.
+
+    Parameters:
+    params (tuple): Spherical coordinates (theta, phi) of unit shower direction vector K.
+    Xants (ndarray): Antenna positions in meters, shape (nants, 3).
+    tants (ndarray): Antenna arrival times in m, shape (nants,).
+    verbose (bool): Verbose output, default is False.
+
+    Returns:
+    float: Chi-squared loss value.
+    """
     theta, phi = params
     nants = tants.shape[0]
     ct = np.cos(theta)
@@ -192,50 +225,58 @@ def PWF_loss(params, Xants, tants, verbose=False, cr=1.0):
     cp = np.cos(phi)
     sp = np.sin(phi)
     K = np.array([st*cp, st*sp, ct])
-    # Make sure tants and Xants are compatible
+
     if (Xants.shape[0] != nants):
-        print("Shapes of tants and Xants are incompatible",
-              tants.shape, Xants.shape)
+        print("Shapes of tants and Xants are incompatible", tants.shape, Xants.shape)
         return None
-    # Use numpy outer methods to build matrix X_ij = x_i -x_j
+
     xk = np.dot(Xants, K)
     DXK = np.subtract.outer(xk, xk)
     DT = np.subtract.outer(tants, tants)
-    chi2 = ((DXK - cr*DT)**2).sum() / \
-        2.  # Sum over upper triangle, diagonal is zero because of antisymmetry of DXK, DT
+    chi2 = ((DXK - DT)**2).sum() / 2.
+    
     if verbose:
         print("params = ", np.rad2deg(params))
         print("Chi2 = ", chi2)
-    return (chi2)
+    return chi2
 
 
-def PWF_gradient(Xants, tants, cr=1.0, c=1.):
+def PWF_gradient(Xants, tants, c=c_light, n=n_atm):
+    """
+    Perform gradient descent to find the best-fit parameters for antenna data.
 
-    bounds = ((np.pi/2+1e-7, np.pi), (0, 2*np.pi))
+    Parameters:
+    Xants (ndarray): Antenna positions in meters, shape (nants, 3).
+    tants (ndarray): Antenna arrival times in seconds, shape (nants,).
+    c (float): Speed of light in m/s, default is  299792458 m/s
+    n (float or ndarray): Indices of refraction (vector or constant), default is 1.000136
+
+    Returns:
+    ndarray: Best-fit parameters (theta, phi) in radians.
+    """
+    bounds = ((np.pi / 2 + 1e-7, np.pi), (0, 2 * np.pi))
     params_in = np.array(bounds).mean(axis=1)
 
-    args = (Xants, tants*c/cr)
+    args = (Xants, tants * c / n)
 
-    res = so.minimize(PWF_loss, params_in, args=args,
-                      bounds=bounds, method='BFGS')
+    res = so.minimize(PWF_loss, params_in, args=args, bounds=bounds, method='BFGS')
 
     params_out = res.x
-
-    params_out = params_out % (2*np.pi)
+    params_out = params_out % (2 * np.pi)
     if params_out[0] > np.pi:
-        params_out[0] = 2*np.pi-params_out[0]
-        params_out[1] = (params_out[1] + np.pi) % (2*np.pi)
+        params_out[0] = 2 * np.pi - params_out[0]
+        params_out[1] = (params_out[1] + np.pi) % (2 * np.pi)
 
-    if params_out[0] < np.pi/2:
+    if params_out[0] < np.pi / 2:
         params_in = params_out
-        params_out[0] = np.pi-params_out[0]
+        params_out[0] = np.pi - params_out[0]
         res = so.minimize(PWF_loss, params_out, args=args)
 
-        params_out = res.x % (2*np.pi)
+        params_out = res.x % (2 * np.pi)
         if params_out[0] > np.pi:
-            params_out[0] = 2*np.pi-params_out[0]
-            params_out[1] = (params_out[1] + np.pi) % (2*np.pi)
+            params_out[0] = 2 * np.pi - params_out[0]
+            params_out[1] = (params_out[1] + np.pi) % (2 * np.pi)
 
-    params_out[0] = (np.pi-params_out[0]) % (2*np.pi)
-    params_out[1] = (np.pi+params_out[1]) % (2*np.pi)
+    params_out[0] = (np.pi - params_out[0]) % (2 * np.pi)
+    params_out[1] = (np.pi + params_out[1]) % (2 * np.pi)
     return params_out
