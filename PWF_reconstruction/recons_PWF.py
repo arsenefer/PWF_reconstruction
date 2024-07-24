@@ -298,3 +298,125 @@ def PWF_gradient(Xants, tants, c=c_light, n=n_atm):
     params_out[0] = (np.pi - params_out[0]) % (2 * np.pi)
     params_out[1] = (np.pi + params_out[1]) % (2 * np.pi)
     return params_out
+
+
+###Index of refraction
+
+def ZHSEffectiveRefractionIndex(X0, Xa):
+    """Compute mean refraction index along trajectory for antenna at Xa and source at X0"""
+    R02 = X0[0]**2 + X0[1]**2
+
+    # Altitude of emission in km
+    h0 = (np.sqrt((X0[2]+R_earth)**2 + R02) - R_earth)/1e3
+    # print('Altitude of emission in km = ',h0)
+    # print(h0)
+
+    # Refractivity at emission
+    rh0 = ns*np.exp(kr*h0)
+
+    modr = np.sqrt(R02)
+    # print(modr)
+
+    if (modr > 1e3):
+
+        # Vector between antenna and emission point
+        U = Xa-X0
+        # Divide into pieces shorter than 10km
+        # nint = np.int(modr/2e4)+1
+        nint = int(modr/2e4)+1
+        K = U/nint
+
+        # Current point coordinates and altitude
+        Curr = X0
+        currh = h0
+        s = 0.
+
+        for i in np.arange(nint):
+            Next = Curr + K  # Next point
+            nextR2 = Next[0]*Next[0] + Next[1]*Next[1]
+            nexth = (np.sqrt((Next[2]+R_earth)**2 + nextR2) - R_earth)/1e3
+            if (np.abs(nexth-currh) > 1e-10):
+                s += (np.exp(kr*nexth)-np.exp(kr*currh))/(kr*(nexth-currh))
+            else:
+                s += np.exp(kr*currh)
+
+            Curr = Next
+            currh = nexth
+            # print (currh)
+
+        avn = ns*s/nint
+        # print(avn)
+        n_eff = 1. + 1e-6*avn  # Effective (average) index
+
+    else:
+
+        # without numerical integration
+        hd = Xa[2]/1e3  # Antenna altitude
+        # if (np.abs(hd-h0) > 1e-10):
+        avn = (ns/(kr*(hd-h0)))*(np.exp(kr*hd)-np.exp(kr*h0))
+        # else:
+        #    avn = ns*np.exp(kr*h0)
+
+        n_eff = 1. + 1e-6*avn  # Effective (average) index
+
+    return (n_eff)
+
+
+def ZHSEffectiveRefractionIndexvect(X0, Xa):
+    """Same as previous but with a vector of antenna position Xa (N*3)"""
+    R02 = X0[0]**2 + X0[1]**2
+
+    # Altitude of emission in km
+    h0 = (np.sqrt((X0[2]+R_earth)**2 + R02) - R_earth)/1e3
+    # print('Altitude of emission in km = ',h0)
+    # print(h0)
+
+    # Refractivity at emission
+    rh0 = ns*np.exp(kr*h0)
+
+    modr = np.sqrt(R02)
+    # print(modr)
+
+    if (modr > 1e3):
+
+        # Vector between antenna and emission point
+        U = Xa-X0
+        # Divide into pieces shorter than 10km
+        # nint = np.int(modr/2e4)+1
+        nint = int(modr/2e4)+1
+        K = U/nint
+
+        # Current point coordinates and altitude
+        Curr = X0
+        currh = h0
+        s = np.zeros(Xa.shape[0])
+
+        for i in np.arange(nint):
+            Next = Curr + K  # Next point
+            nextR2 = Next[:, 0]*Next[:, 0] + Next[:, 1]*Next[:, 1]
+            nexth = (np.sqrt((Next[:, 2]+R_earth)**2 + nextR2) - R_earth)/1e3
+            mask = np.abs(nexth-currh) > 1e-10
+            s[mask] += (np.exp(kr*nexth[mask])-np.exp(kr*currh)) / \
+                (kr*(nexth[mask]-currh))
+            s[1-mask] += np.exp(kr*currh)
+
+            Curr = Next
+            currh = nexth
+            # print (currh)
+
+        avn = ns*s/nint
+        # print(avn)
+        n_eff = 1. + 1e-6*avn  # Effective (average) index
+
+    else:
+
+        # without numerical integration
+        hd = Xa[:, 2]/1e3  # Antenna altitude
+        # if (np.abs(hd-h0) > 1e-10):
+        avn = (ns/(kr*(hd-h0)))*(np.exp(kr*hd)-np.exp(kr*h0))
+        # else:
+        #    avn = ns*np.exp(kr*h0)
+
+        n_eff = 1. + 1e-6*avn  # Effective (average) index
+
+    return (n_eff)
