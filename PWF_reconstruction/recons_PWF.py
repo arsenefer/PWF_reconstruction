@@ -8,6 +8,7 @@ import numdifftools as nd
 def Linear_solver(Xants, tants, c=c_light, n=n_atm):
     """
     Solve for the best-fit vector k given antenna positions and arrival times.
+    (from eq.)
 
     Parameters:
     Xants (ndarray): Antenna positions in meters, shape (nants, 3).
@@ -30,6 +31,7 @@ def Linear_solver(Xants, tants, c=c_light, n=n_atm):
 def _projector(k, Inv):
     """
     Compute the projection of vector k on the unit sphere along the largest axis of distribution.
+    (from eq.)
 
     Parameters:
     k (ndarray): Vector to be projected, shape (3,).
@@ -54,6 +56,7 @@ def _projector(k, Inv):
 def PWF_projection(Xants, tants, c=c_light, n=n_atm):
     """
     Compute the projection of k on the unit sphere along the largest axis of distribution.
+    (from eq.)
 
     Parameters:
     Xants (ndarray): Antenna positions in meters, shape (nants, 3).
@@ -75,6 +78,7 @@ def PWF_projection(Xants, tants, c=c_light, n=n_atm):
 def PWF_semianalytical(Xants, tants, verbose=False, c=c_light, n=n_atm):
     """
     Solve the minimization problem using a semi-analytical approach.
+    (from eq.)
 
     Parameters:
     Xants (ndarray): Antenna positions in meters, shape (nants, 3).
@@ -135,6 +139,7 @@ def PWF_semianalytical(Xants, tants, verbose=False, c=c_light, n=n_atm):
 def Covariance_tangentplane(theta_pred, phi_pred, Xants, sigma, c=c_light, n=n_atm):
     """
     Compute the covariance matrix of theta and phi given predictions and antenna data.
+    (from eq.)
 
     Parameters:
     theta_pred (float): Predicted theta angle in radians.
@@ -145,7 +150,7 @@ def Covariance_tangentplane(theta_pred, phi_pred, Xants, sigma, c=c_light, n=n_a
     n (float or ndarray): Indices of refraction (vector or constant), default is 1.000136
 
     Returns:
-    ndarray: Covariance matrix of theta and phi, shape (2, 2).
+    ndarray: Covariance matrix of theta and phi in radians^2, shape (2, 2).
     """
     Xants_cor = (Xants - Xants.mean(axis=0)[None, :]) / (c / np.array(n).reshape(-1, 1))
     Sigma = (sigma)**2 * np.linalg.pinv(Xants_cor.T @ Xants_cor)
@@ -162,9 +167,10 @@ def Covariance_tangentplane(theta_pred, phi_pred, Xants, sigma, c=c_light, n=n_a
     return Sigma_bar
 
 
-def fisher_Variance(theta_pred, phi_pred, Xants, sigma, c=c_light, n=n_atm):
+def Covariance_schurcomplement(theta_pred, phi_pred, Xants, sigma, c=c_light, n=n_atm):
     """
-    Compute the Fisher matrix variance for theta and phi given predictions and antenna data.
+    Compute the covariance matrix of theta and phi given predictions and antenna data.
+    (from eq.)
 
     Parameters:
     theta_pred (float): Predicted theta angle in radians.
@@ -175,7 +181,7 @@ def fisher_Variance(theta_pred, phi_pred, Xants, sigma, c=c_light, n=n_atm):
     n (float or ndarray): Indices of refraction (vector or constant), default is 1.000136
 
     Returns:
-    ndarray: Fisher matrix variance, shape (2, 2).
+    ndarray: Covariance matrix of theta and phi in radians^2, shape (2, 2).
     """
     B = np.array([
         [-np.cos(theta_pred)*np.cos(phi_pred), np.sin(theta_pred)*np.sin(phi_pred)],
@@ -189,7 +195,7 @@ def fisher_Variance(theta_pred, phi_pred, Xants, sigma, c=c_light, n=n_atm):
 
 def cov_matrix(theta_pred, phi_pred, Xants, sigma, c=c_light, n=n_atm):
     """
-    Wrapper for Covariance_tangentplane function.
+    Wrapper for Covariance_schurcomplement function.
 
     Parameters:
     theta_pred (float): Predicted theta angle in radians.
@@ -200,6 +206,19 @@ def cov_matrix(theta_pred, phi_pred, Xants, sigma, c=c_light, n=n_atm):
     n (float or ndarray): Indices of refraction (vector or constant), default is 1.000136
 
     Returns:
-    ndarray: Covariance matrix of theta and phi, shape (2, 2).
+    ndarray: Covariance matrix of theta and phi in radians^2, shape (2, 2).
     """
-    return Covariance_tangentplane(theta_pred, phi_pred, Xants, sigma, c=c, n=n)
+    return Covariance_schurcomplement(theta_pred, phi_pred, Xants, sigma, c=c, n=n)
+
+def angular_error(theta_pred, Covar):
+    """
+    Compute the pointing direction error from the zenith angle and the covariance matrix. 
+    (from eq., with square root)
+
+    Parameters:
+    theta_pred (float): Predicted theta angle in radians.
+    Covar (ndarray): Covariance matrix of theta and phi in radians^2, shape (2, 2).
+    Returns:
+    float: absolute pointing accuracy in radians.
+    """
+    return np.sqrt(Covar[0,0] + np.sin(theta_pred)**2 * Covar[1,1])
