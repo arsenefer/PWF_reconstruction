@@ -7,7 +7,8 @@ import numdifftools as nd
 
 def Linear_solver(Xants, tants, c=c_light, n=n_atm):
     """
-    Solve for the best-fit vector k given antenna positions and arrival times.
+    Solve for the best-fit vector k* given antenna positions and arrival times with no constraint.
+    (Equation 9 in the paper)
 
     Parameters:
     Xants (ndarray): Antenna positions in meters, shape (nants, 3).
@@ -29,7 +30,8 @@ def Linear_solver(Xants, tants, c=c_light, n=n_atm):
 
 def _projector(k, Inv):
     """
-    Compute the projection of vector k on the unit sphere along the largest axis of distribution.
+    Compute the projection of vector k* on the unit sphere along the largest axis of distribution.
+    (Equation 12 in the paper)
 
     Parameters:
     k (ndarray): Vector to be projected, shape (3,).
@@ -53,7 +55,8 @@ def _projector(k, Inv):
 
 def PWF_projection(Xants, tants, c=c_light, n=n_atm):
     """
-    Compute the projection of k on the unit sphere along the largest axis of distribution.
+    Computes the projection method described in the paper. Gives a very good approximation of the polar angles $\\theta$ and $\\phi$ 
+    (See paper section 2.1.1)
 
     Parameters:
     Xants (ndarray): Antenna positions in meters, shape (nants, 3).
@@ -69,12 +72,13 @@ def PWF_projection(Xants, tants, c=c_light, n=n_atm):
 
     theta_opt = np.arccos(-k_opt[2])
     phi_opt = np.arctan2(-k_opt[1], -k_opt[0])
-    return theta_opt, phi_opt
+    return np.array((theta_opt, phi_opt))
 
 
 def PWF_semianalytical(Xants, tants, verbose=False, c=c_light, n=n_atm):
     """
     Solve the minimization problem using a semi-analytical approach.
+    (see section 2.1.2)
 
     Parameters:
     Xants (ndarray): Antenna positions in meters, shape (nants, 3).
@@ -134,7 +138,8 @@ def PWF_semianalytical(Xants, tants, verbose=False, c=c_light, n=n_atm):
 
 def Covariance_tangentplane(theta_pred, phi_pred, Xants, sigma, c=c_light, n=n_atm):
     """
-    Compute the covariance matrix of theta and phi given predictions and antenna data.
+    Compute the covariance matrix of $\\theta$ and $\\phi$ given prediction, antenna data and std vector of timings for all antennas. 
+    Adapted from equation 22 in the paper.
 
     Parameters:
     theta_pred (float): Predicted theta angle in radians.
@@ -165,6 +170,7 @@ def Covariance_tangentplane(theta_pred, phi_pred, Xants, sigma, c=c_light, n=n_a
 def fisher_Variance(theta_pred, phi_pred, Xants, sigma, c=c_light, n=n_atm):
     """
     Compute the Fisher matrix variance for theta and phi given predictions and antenna data.
+    Obtained from equation 24 in the paper.
 
     Parameters:
     theta_pred (float): Predicted theta angle in radians.
@@ -202,4 +208,18 @@ def cov_matrix(theta_pred, phi_pred, Xants, sigma, c=c_light, n=n_atm):
     Returns:
     ndarray: Covariance matrix of theta and phi, shape (2, 2).
     """
-    return Covariance_tangentplane(theta_pred, phi_pred, Xants, sigma, c=c, n=n)
+    return fisher_Variance(theta_pred, phi_pred, Xants, sigma, c=c, n=n)
+
+def square_angular_uncertainty(Cov, theta_pred, *args, **kwargs):
+    """
+    Compute the pointing accuracy $\\Psi^2$ according to equation 29.
+
+    Parameters:
+    Cov (ndarray): 2*2 covariance matrix of $\\theta$ and $\\phi$ 
+    theta_pred (float): Predicted theta angle in radians.
+    phi_pred (float): Predicted phi angle in radians.
+
+    Returns:
+    float: pointing accurancy $<\\Psi^2>$
+    """
+    return Cov[0,0] + np.sin(theta_pred)*Cov[1,1]

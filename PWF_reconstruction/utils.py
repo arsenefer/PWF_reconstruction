@@ -29,11 +29,6 @@ def sph2cart(theta, phi, r=1):
     return np.concatenate((x[..., None], y[..., None], z[..., None]), axis=-1)
 
 
-if __name__ == '__main__':
-    theta, phi = np.array((0, np.pi/4, np.pi/2, np.pi/1.5)
-                          ), np.array((0, np.pi/2, np.pi, np.pi*1.5))
-    print(sph2cart(theta, phi))
-
 
 def opening_folders(cur):
 
@@ -90,5 +85,4 @@ def opening_folders(cur):
 
     total_df = pd.merge(df_input, df_timings, on='event_name', how='inner')
     total_df = pd.merge(total_df, df_antennas, on='ant_ids', how='inner')
-    print(len(total_df))
     return total_df
