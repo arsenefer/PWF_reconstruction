@@ -208,18 +208,17 @@ def cov_matrix(theta_pred, phi_pred, Xants, sigma, c=c_light, n=n_atm):
     Returns:
     ndarray: Covariance matrix of theta and phi in radians^2, shape (2, 2).
     """
-    return fisher_Variance(theta_pred, phi_pred, Xants, sigma, c=c, n=n)
+    return Covariance_schurcomplement(theta_pred, phi_pred, Xants, sigma, c=c, n=n)
 
-def square_angular_uncertainty(Cov, theta_pred, *args, **kwargs):
+def angular_error(theta_pred, Covar):
     """
-    Compute the pointing accuracy $\\Psi^2$ according to equation 29.
+    Compute the pointing direction error from the zenith angle and the covariance matrix. 
+    (from eq., with square root)
 
     Parameters:
-    Cov (ndarray): 2*2 covariance matrix of $\\theta$ and $\\phi$ 
     theta_pred (float): Predicted theta angle in radians.
-    phi_pred (float): Predicted phi angle in radians.
-
+    Covar (ndarray): Covariance matrix of theta and phi in radians^2, shape (2, 2).
     Returns:
-    float: pointing accurancy $<\\Psi^2>$
+    float: absolute pointing accuracy in radians.
     """
-    return Cov[0,0] + np.sin(theta_pred)*Cov[1,1]
+    return np.sqrt(Covar[0,0] + np.sin(theta_pred)**2 * Covar[1,1])
