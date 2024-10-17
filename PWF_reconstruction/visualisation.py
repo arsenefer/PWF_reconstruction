@@ -8,7 +8,7 @@ from scipy.stats import norm
 
 from .utils import R2D
 from .utils import sph2cart
-from .recons_PWF import cov_matrix
+from .recons_PWF import cov_matrix, fisher_Variance, Covariance_tangentplane
 
 
 def NLL(theta_pred, phi_pred, theta, phi, estimate_cova):
@@ -142,6 +142,7 @@ def PICP(total_df: pd.DataFrame, method, c_light=1):
             theta_pred, phi_pred, theta, phi, estimate_cova, contours[2])
 
     res_df = total_df.groupby("event_name", as_index=False).first()
+    print(res_df.groupby("zenith", as_index=False).sum())
     picp_groups = res_df.groupby("zenith")[['68', '95', '99']]
     picp = picp_groups.mean()
 

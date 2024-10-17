@@ -150,7 +150,7 @@ def Covariance_tangentplane(theta_pred, phi_pred, Xants, sigma, c=c_light, n=n_a
     n (float or ndarray): Indices of refraction (vector or constant), default is 1.000136
 
     Returns:
-    ndarray: Covariance matrix of theta and phi, shape (2, 2).
+    ndarray: Covariance matrix of theta and phi in radians^2, shape (2, 2).
     """
     Xants_cor = (Xants - Xants.mean(axis=0)[None, :]) / (c / np.array(n).reshape(-1, 1))
     Sigma = (sigma)**2 * np.linalg.pinv(Xants_cor.T @ Xants_cor)
@@ -167,7 +167,7 @@ def Covariance_tangentplane(theta_pred, phi_pred, Xants, sigma, c=c_light, n=n_a
     return Sigma_bar
 
 
-def fisher_Variance(theta_pred, phi_pred, Xants, sigma, c=c_light, n=n_atm):
+def Covariance_schurcomplement(theta_pred, phi_pred, Xants, sigma, c=c_light, n=n_atm):
     """
     Compute the Fisher matrix variance for theta and phi given predictions and antenna data.
     Obtained from equation 24 in the paper.
@@ -181,7 +181,7 @@ def fisher_Variance(theta_pred, phi_pred, Xants, sigma, c=c_light, n=n_atm):
     n (float or ndarray): Indices of refraction (vector or constant), default is 1.000136
 
     Returns:
-    ndarray: Fisher matrix variance, shape (2, 2).
+    ndarray: Covariance matrix of theta and phi in radians^2, shape (2, 2).
     """
     B = np.array([
         [-np.cos(theta_pred)*np.cos(phi_pred), np.sin(theta_pred)*np.sin(phi_pred)],
@@ -195,7 +195,7 @@ def fisher_Variance(theta_pred, phi_pred, Xants, sigma, c=c_light, n=n_atm):
 
 def cov_matrix(theta_pred, phi_pred, Xants, sigma, c=c_light, n=n_atm):
     """
-    Wrapper for Covariance_tangentplane function.
+    Wrapper for Covariance_schurcomplement function.
 
     Parameters:
     theta_pred (float): Predicted theta angle in radians.
@@ -206,7 +206,7 @@ def cov_matrix(theta_pred, phi_pred, Xants, sigma, c=c_light, n=n_atm):
     n (float or ndarray): Indices of refraction (vector or constant), default is 1.000136
 
     Returns:
-    ndarray: Covariance matrix of theta and phi, shape (2, 2).
+    ndarray: Covariance matrix of theta and phi in radians^2, shape (2, 2).
     """
     return fisher_Variance(theta_pred, phi_pred, Xants, sigma, c=c, n=n)
 
