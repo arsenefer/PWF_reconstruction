@@ -1,8 +1,6 @@
-from .utils import R_earth, R2D, ns, kr, c_light, n_atm
+from .utils import c_light, n_atm
 import numpy as np
 from scipy.optimize import brentq
-import scipy.optimize as so
-import numdifftools as nd
 
 
 def Linear_solver(Xants, tants, c=c_light, n=n_atm):
