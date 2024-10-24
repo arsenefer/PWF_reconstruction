@@ -120,16 +120,3 @@ def mean(X:np.ndarray, sigma=None):
         return ( 1/Q_1.sum() ) * ( Q_1.sum(axis=0) @ X )
     else:
         return X.mean(axis=0)
-
-# from time import time
-# np.random.seed(0)
-# x_ants = np.random.rand(300)
-# print(x_ants.shape)
-# n = 100
-# t1 = time()
-# for i in range(n):
-#     print(mean(x_ants, 1.))
-#     # print(mean(x_ants, np.array([1.]*len(x_ants))))
-#     # print(mean(x_ants, np.diag([1.]*len(x_ants))))
-# t2 = time()
-# print(f"It took {(t2-t1)/n} s per event")

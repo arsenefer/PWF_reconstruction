@@ -186,7 +186,6 @@ def Covariance_schurcomplement(theta_pred, phi_pred, Xants, sigma, c=c_light, n=
         [-np.cos(theta_pred)*np.sin(phi_pred), -np.sin(theta_pred)*np.cos(phi_pred)],
         [np.sin(theta_pred), 0]
     ])
-    print(type(sigma))
     Xants_cor = (Xants - mean(Xants, sigma)[None, :]) / (c / np.array(n).reshape(-1, 1))
     return np.linalg.pinv(B.T @ Xants_cor.T @ Xants_cor @ B) * (sigma**2)
 
