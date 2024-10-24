@@ -9,6 +9,9 @@ n_atm = 1.000136
 
 
 def cart2sph(k):
+    """
+    Convert cartesian coordinate to spherical coordinate
+    """
     r = np.linalg.norm(k, axis=1)
     tp = np.linalg.norm(k[:, :2], axis=1)
     theta = np.arctan2(tp, k[:, 2])
@@ -17,11 +20,13 @@ def cart2sph(k):
 
 
 def sph2cart(theta, phi, r=1):
+    """
+    Convert spherical coordinate to cartesian coordinate
+    """
     x = np.array(r*np.sin(theta)*np.cos(phi))
     y = np.array(r*np.sin(theta)*np.sin(phi))
     z = np.array(r*np.cos(theta))
     return np.concatenate((x[..., None], y[..., None], z[..., None]), axis=-1)
-
 
 
 def opening_folders(cur):
@@ -80,3 +85,51 @@ def opening_folders(cur):
     total_df = pd.merge(df_input, df_timings, on='event_name', how='inner')
     total_df = pd.merge(total_df, df_antennas, on='ant_ids', how='inner')
     return total_df
+
+def create_times(P:np.array, k, sigma, c=c_light, n=n_atm):
+    """
+    Producing antenna timings with Gaussian noise of scale $\sigma$.
+
+    Parameters:
+    Xants (ndarray): Antenna positions in meters, shape (nants, 3).
+    k (ndarray): signal propagation direction, shape (3).
+    c (float): Speed of light in m/s, default is  299792458 m/s
+    n (float or ndarray): Indices of refraction (vector or constant), default is 1.000136
+
+    Returns:
+    ndarray: Theta and phi angles in radians.
+    """
+    assert type(k) is np.ndarray
+    assert k.ndim == 2
+    P0 = P.mean(axis=0)
+    T = k[None,:] @ (P-P0)[:,:].T/(c/n)
+    T += np.random.normal(0, sigma, T.shape)
+    return T
+from scipy.linalg import cho_factor, cho_solve
+
+def _inv_cho(A):
+    c, low = cho_factor(A)
+    A_inv = cho_solve((c, low), np.eye(A.shape[0]))
+    return A_inv
+
+def mean(X:np.ndarray, sigma=None):
+    if type(sigma) is np.ndarray and sigma.ndim==1:
+        return ( 1/(1/sigma).sum() ) * ( (1/sigma) @ X )
+    elif type(sigma) is np.ndarray and sigma.ndim==2:
+        Q_1 = _inv_cho(sigma)
+        return ( 1/Q_1.sum() ) * ( Q_1.sum(axis=0) @ X )
+    else:
+        return X.mean(axis=0)
+
+# from time import time
+# np.random.seed(0)
+# x_ants = np.random.rand(300)
+# print(x_ants.shape)
+# n = 100
+# t1 = time()
+# for i in range(n):
+#     print(mean(x_ants, 1.))
+#     # print(mean(x_ants, np.array([1.]*len(x_ants))))
+#     # print(mean(x_ants, np.diag([1.]*len(x_ants))))
+# t2 = time()
+# print(f"It took {(t2-t1)/n} s per event")

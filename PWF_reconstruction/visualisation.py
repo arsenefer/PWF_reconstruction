@@ -8,7 +8,7 @@ from scipy.stats import norm
 
 from .utils import R2D
 from .utils import sph2cart
-from .recons_PWF import cov_matrix, fisher_Variance, Covariance_tangentplane
+from .recons_PWF import cov_matrix, Covariance_schurcomplement, Covariance_tangentplane
 
 
 def NLL(theta_pred, phi_pred, theta, phi, estimate_cova):

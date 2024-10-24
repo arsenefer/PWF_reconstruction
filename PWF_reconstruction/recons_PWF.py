@@ -1,9 +1,9 @@
-from .utils import c_light, n_atm
+from .utils import c_light, n_atm, mean
 import numpy as np
 from scipy.optimize import brentq
 
 
-def Linear_solver(Xants, tants, c=c_light, n=n_atm):
+def Linear_solver(Xants, tants, c=c_light, n=n_atm, sigma=None):
     """
     Solve for the best-fit vector k* given antenna positions and arrival times with no constraint.
     (Equation 9 in the paper)
@@ -17,8 +17,8 @@ def Linear_solver(Xants, tants, c=c_light, n=n_atm):
     Returns:
     tuple: Best-fit vector k (ndarray) and the pseudoinverse of the design matrix (ndarray).
     """
-    t_ants = (c/n * (tants - tants.mean()))[:, None]
-    P_1 = (Xants - Xants.mean(axis=0))
+    t_ants = (c/n * (tants - mean(tants, sigma)))[:, None]
+    P_1 = (Xants - mean(Xants, sigma)[None, :])
 
     pseudoinverse = np.linalg.pinv(P_1.T @ P_1)
     M = pseudoinverse @ P_1.T
@@ -51,7 +51,7 @@ def _projector(k, Inv):
     return k_opt
 
 
-def PWF_projection(Xants, tants, c=c_light, n=n_atm):
+def PWF_projection(Xants, tants, c=c_light, n=n_atm, sigma=None):
     """
     Computes the projection method described in the paper. Gives a very good approximation of the polar angles $\\theta$ and $\\phi$ 
     (See paper section 2.1.1)
@@ -65,7 +65,7 @@ def PWF_projection(Xants, tants, c=c_light, n=n_atm):
     Returns:
     tuple: Theta and phi angles in radians.
     """
-    k_lin, Inv = Linear_solver(Xants, tants, c=c, n=n)
+    k_lin, Inv = Linear_solver(Xants, tants, c=c, n=n, sigma=sigma)
     k_opt = _projector(k_lin, Inv)
 
     theta_opt = np.arccos(-k_opt[2])
@@ -73,7 +73,7 @@ def PWF_projection(Xants, tants, c=c_light, n=n_atm):
     return np.array((theta_opt, phi_opt))
 
 
-def PWF_semianalytical(Xants, tants, verbose=False, c=c_light, n=n_atm):
+def PWF_semianalytical(Xants, tants, verbose=False, c=c_light, n=n_atm, sigma=None):
     """
     Solve the minimization problem using a semi-analytical approach.
     (see section 2.1.2)
@@ -95,9 +95,9 @@ def PWF_semianalytical(Xants, tants, verbose=False, c=c_light, n=n_atm):
         return None
 
     tants_cor = tants * c / n
-    PXT = Xants - Xants.mean(axis=0)
+    PXT = Xants - mean(Xants, sigma)[None, :]
     A = np.dot(Xants.T, PXT)
-    b = np.dot(Xants.T, tants_cor - tants_cor.mean(axis=0))
+    b = np.dot(Xants.T, tants_cor - mean(tants_cor, sigma))
     d, W = np.linalg.eigh(A)
     beta = np.dot(b, W)
     nbeta = np.linalg.norm(beta)
@@ -150,7 +150,7 @@ def Covariance_tangentplane(theta_pred, phi_pred, Xants, sigma, c=c_light, n=n_a
     Returns:
     ndarray: Covariance matrix of theta and phi in radians^2, shape (2, 2).
     """
-    Xants_cor = (Xants - Xants.mean(axis=0)[None, :]) / (c / np.array(n).reshape(-1, 1))
+    Xants_cor = (Xants - mean(Xants, sigma)[None, :]) / (c / np.array(n).reshape(-1, 1))
     Sigma = (sigma)**2 * np.linalg.pinv(Xants_cor.T @ Xants_cor)
 
     Q = np.linalg.pinv(np.array([[-np.sin(theta_pred)*np.cos(phi_pred), -np.cos(theta_pred)*np.cos(phi_pred), np.sin(theta_pred)*np.sin(phi_pred)],
@@ -186,8 +186,8 @@ def Covariance_schurcomplement(theta_pred, phi_pred, Xants, sigma, c=c_light, n=
         [-np.cos(theta_pred)*np.sin(phi_pred), -np.sin(theta_pred)*np.cos(phi_pred)],
         [np.sin(theta_pred), 0]
     ])
-    Xants_cor = (Xants - Xants.mean(axis=0)[None, :]) / (c / np.array(n).reshape(-1, 1))
-
+    print(type(sigma))
+    Xants_cor = (Xants - mean(Xants, sigma)[None, :]) / (c / np.array(n).reshape(-1, 1))
     return np.linalg.pinv(B.T @ Xants_cor.T @ Xants_cor @ B) * (sigma**2)
 
 
