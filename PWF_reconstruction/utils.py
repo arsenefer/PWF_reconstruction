@@ -1,11 +1,28 @@
 import numpy as np
 import pandas as pd
+from scipy.linalg import cho_factor, cho_solve
 
 # Defining constants
 R2D = 180/np.pi
 # Physical constants
 c_light = 2.997924580e8
 n_atm = 1.000136
+
+
+def _inv_cho(A):
+    c, low = cho_factor(A)
+    A_inv = cho_solve((c, low), np.eye(A.shape[0]))
+    return A_inv
+
+def mean(X:np.ndarray, sigma=None):
+    if type(sigma) is np.ndarray and sigma.ndim==1:
+        return ( 1/(1/sigma).sum() ) * ( (1/sigma) @ X )
+    elif type(sigma) is np.ndarray and sigma.ndim==2:
+        Q_1 = _inv_cho(sigma)
+        return ( 1/Q_1.sum() ) * ( Q_1.sum(axis=0) @ X )
+    else:
+        return X.mean(axis=0)
+    
 
 
 def cart2sph(k):
@@ -100,23 +117,7 @@ def create_times(P:np.array, k, sigma, c=c_light, n=n_atm):
     ndarray: Theta and phi angles in radians.
     """
     assert type(k) is np.ndarray
-    assert k.ndim == 2
-    P0 = P.mean(axis=0)
+    P0 = mean(P)
     T = k[None,:] @ (P-P0)[:,:].T/(c/n)
     T += np.random.normal(0, sigma, T.shape)
     return T
-from scipy.linalg import cho_factor, cho_solve
-
-def _inv_cho(A):
-    c, low = cho_factor(A)
-    A_inv = cho_solve((c, low), np.eye(A.shape[0]))
-    return A_inv
-
-def mean(X:np.ndarray, sigma=None):
-    if type(sigma) is np.ndarray and sigma.ndim==1:
-        return ( 1/(1/sigma).sum() ) * ( (1/sigma) @ X )
-    elif type(sigma) is np.ndarray and sigma.ndim==2:
-        Q_1 = _inv_cho(sigma)
-        return ( 1/Q_1.sum() ) * ( Q_1.sum(axis=0) @ X )
-    else:
-        return X.mean(axis=0)
