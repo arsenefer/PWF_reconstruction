@@ -1,4 +1,6 @@
-from .utils import c_light, n_atm, mean
+# Code from Ferriere et al. (2024) : https://doi.org/10.48550/arXiv.2408.15677
+
+from .utils import c_light, n_atm, mean, _inv_cho
 import numpy as np
 from scipy.optimize import brentq
 
@@ -19,9 +21,18 @@ def Linear_solver(Xants, tants, c=c_light, n=n_atm, sigma=None):
     """
     t_ants = (c/n * (tants - mean(tants, sigma)))[:, None]
     P_1 = (Xants - mean(Xants, sigma)[None, :])
+    if type(sigma) is np.ndarray and sigma.ndim==2:
+        Q_1 = _inv_cho(sigma)
+        pseudoinverse = np.linalg.pinv(P_1.T @ Q_1 @ P_1 )
+        M = pseudoinverse @ P_1.T @ Q_1
+    elif type(sigma) is np.ndarray and sigma.ndim==1:
+        P1_scaled = (1/sigma[:,None]**2) * P_1
+        pseudoinverse = np.linalg.pinv(P_1.T @ ( P1_scaled ))
+        M = pseudoinverse @ P1_scaled.T
+    else:
+        pseudoinverse = np.linalg.pinv(P_1.T @ P_1)
+        M = pseudoinverse @ P_1.T
 
-    pseudoinverse = np.linalg.pinv(P_1.T @ P_1)
-    M = pseudoinverse @ P_1.T
     res = M @ t_ants
     return res.flatten(), pseudoinverse
 
@@ -71,7 +82,6 @@ def PWF_projection(Xants, tants, c=c_light, n=n_atm, sigma=None):
     theta_opt = np.arccos(-k_opt[2])
     phi_opt = np.arctan2(-k_opt[1], -k_opt[0])
     return np.array((theta_opt, phi_opt))
-
 
 def PWF_semianalytical(Xants, tants, verbose=False, c=c_light, n=n_atm, sigma=None):
     """
@@ -133,9 +143,12 @@ def PWF_semianalytical(Xants, tants, verbose=False, c=c_light, n=n_atm, sigma=No
         phi_opt += 2 * np.pi
     return np.array([theta_opt, phi_opt])
 
-
-def Covariance_tangentplane(theta_pred, phi_pred, Xants, sigma, c=c_light, n=n_atm):
+def cov_matrix(theta_pred, phi_pred, Xants, sigma, c=c_light, n=n_atm, method=1):
     """
+    if method 1 :
+    Compute the Fisher matrix variance for theta and phi given predictions and antenna data.
+    Obtained from equation 24 in the paper.
+    else:
     Compute the covariance matrix of $\\theta$ and $\\phi$ given prediction, antenna data and std vector of timings for all antennas. 
     Adapted from equation 22 in the paper.
 
@@ -150,62 +163,29 @@ def Covariance_tangentplane(theta_pred, phi_pred, Xants, sigma, c=c_light, n=n_a
     Returns:
     ndarray: Covariance matrix of theta and phi in radians^2, shape (2, 2).
     """
-    Xants_cor = (Xants - mean(Xants, sigma)[None, :]) / (c / np.array(n).reshape(-1, 1))
-    Sigma = (sigma)**2 * np.linalg.pinv(Xants_cor.T @ Xants_cor)
+    if method==1:
+        B = np.array([
+            [-np.cos(theta_pred)*np.cos(phi_pred), np.sin(theta_pred)*np.sin(phi_pred)],
+            [-np.cos(theta_pred)*np.sin(phi_pred), -np.sin(theta_pred)*np.cos(phi_pred)],
+            [np.sin(theta_pred), 0]
+        ])
+        Xants_cor = (Xants - mean(Xants, sigma)[None, :]) / (c / np.array(n).reshape(-1, 1))
+        return np.linalg.pinv(B.T @ Xants_cor.T @ Xants_cor @ B) * (sigma**2)
+    
+    else:
+        Xants_cor = (Xants - mean(Xants, sigma)[None, :]) / (c / np.array(n).reshape(-1, 1))
+        Sigma = (sigma)**2 * np.linalg.pinv(Xants_cor.T @ Xants_cor)
 
-    Q = np.linalg.pinv(np.array([[-np.sin(theta_pred)*np.cos(phi_pred), -np.cos(theta_pred)*np.cos(phi_pred), np.sin(theta_pred)*np.sin(phi_pred)],
-                                [-np.sin(theta_pred)*np.sin(phi_pred), -np.cos(theta_pred)*np.sin(phi_pred), -np.sin(theta_pred)*np.cos(phi_pred)],
-                                [-np.cos(theta_pred), np.sin(theta_pred), 0]]))
-    QSigQt = Q @ Sigma @ Q.T
+        Q = np.linalg.pinv(np.array([[-np.sin(theta_pred)*np.cos(phi_pred), -np.cos(theta_pred)*np.cos(phi_pred), np.sin(theta_pred)*np.sin(phi_pred)],
+                                    [-np.sin(theta_pred)*np.sin(phi_pred), -np.cos(theta_pred)*np.sin(phi_pred), -np.sin(theta_pred)*np.cos(phi_pred)],
+                                    [-np.cos(theta_pred), np.sin(theta_pred), 0]]))
+        QSigQt = Q @ Sigma @ Q.T
 
-    Sigma_aa = QSigQt[1:, 1:]
-    Sigma_ar = QSigQt[0, 1:]
-    Sigma_rr = QSigQt[0, 0]
-    Sigma_bar = Sigma_aa - 1 / Sigma_rr * Sigma_ar[:, None] @ Sigma_ar[None, :]
-    return Sigma_bar
-
-
-def Covariance_schurcomplement(theta_pred, phi_pred, Xants, sigma, c=c_light, n=n_atm):
-    """
-    Compute the Fisher matrix variance for theta and phi given predictions and antenna data.
-    Obtained from equation 24 in the paper.
-
-    Parameters:
-    theta_pred (float): Predicted theta angle in radians.
-    phi_pred (float): Predicted phi angle in radians.
-    Xants (ndarray): Antenna positions in meters, shape (nants, 3).
-    sigma (float): Standard deviation of arrival times.
-    c (float): Speed of light in m/s, default is  299792458 m/s
-    n (float or ndarray): Indices of refraction (vector or constant), default is 1.000136
-
-    Returns:
-    ndarray: Covariance matrix of theta and phi in radians^2, shape (2, 2).
-    """
-    B = np.array([
-        [-np.cos(theta_pred)*np.cos(phi_pred), np.sin(theta_pred)*np.sin(phi_pred)],
-        [-np.cos(theta_pred)*np.sin(phi_pred), -np.sin(theta_pred)*np.cos(phi_pred)],
-        [np.sin(theta_pred), 0]
-    ])
-    Xants_cor = (Xants - mean(Xants, sigma)[None, :]) / (c / np.array(n).reshape(-1, 1))
-    return np.linalg.pinv(B.T @ Xants_cor.T @ Xants_cor @ B) * (sigma**2)
-
-
-def cov_matrix(theta_pred, phi_pred, Xants, sigma, c=c_light, n=n_atm):
-    """
-    Wrapper for Covariance_schurcomplement function.
-
-    Parameters:
-    theta_pred (float): Predicted theta angle in radians.
-    phi_pred (float): Predicted phi angle in radians.
-    Xants (ndarray): Antenna positions in meters, shape (nants, 3).
-    sigma (float): Standard deviation of arrival times.
-    c (float): Speed of light in m/s, default is  299792458 m/s
-    n (float or ndarray): Indices of refraction (vector or constant), default is 1.000136
-
-    Returns:
-    ndarray: Covariance matrix of theta and phi in radians^2, shape (2, 2).
-    """
-    return Covariance_schurcomplement(theta_pred, phi_pred, Xants, sigma, c=c, n=n)
+        Sigma_aa = QSigQt[1:, 1:]
+        Sigma_ar = QSigQt[0, 1:]
+        Sigma_rr = QSigQt[0, 0]
+        Sigma_bar = Sigma_aa - 1 / Sigma_rr * Sigma_ar[:, None] @ Sigma_ar[None, :]
+        return Sigma_bar
 
 def angular_error(theta_pred, Covar):
     """

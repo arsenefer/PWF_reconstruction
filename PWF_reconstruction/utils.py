@@ -1,3 +1,5 @@
+# Code from Ferriere et al. (2024) : https://doi.org/10.48550/arXiv.2408.15677
+
 import numpy as np
 import pandas as pd
 from scipy.linalg import cho_factor, cho_solve
@@ -110,6 +112,7 @@ def create_times(P:np.array, k, sigma, c=c_light, n=n_atm):
     Parameters:
     Xants (ndarray): Antenna positions in meters, shape (nants, 3).
     k (ndarray): signal propagation direction, shape (3).
+    sigma (float, np.ndarray): Standard deviation of arrival times.
     c (float): Speed of light in m/s, default is  299792458 m/s
     n (float or ndarray): Indices of refraction (vector or constant), default is 1.000136
 
@@ -117,7 +120,7 @@ def create_times(P:np.array, k, sigma, c=c_light, n=n_atm):
     ndarray: Theta and phi angles in radians.
     """
     assert type(k) is np.ndarray
-    P0 = mean(P)
-    T = k[None,:] @ (P-P0)[:,:].T/(c/n)
+    P0 = mean(P, sigma)
+    T = (P-P0) @ k / (c/n)
     T += np.random.normal(0, sigma, T.shape)
     return T
