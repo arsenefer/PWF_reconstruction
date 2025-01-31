@@ -141,7 +141,7 @@ def PWF_semianalytical(Xants, tants, verbose=False, c=c_light, n=n_atm, sigma=No
 
     if phi_opt < 0:
         phi_opt += 2 * np.pi
-    return np.array([theta_opt, phi_opt])
+    return theta_opt, phi_opt, k_opt
 
 def cov_matrix(theta_pred, phi_pred, Xants, sigma, c=c_light, n=n_atm, method=1):
     """
