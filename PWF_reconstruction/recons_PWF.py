@@ -200,6 +200,8 @@ def angular_error(theta_pred, Covar):
     """
     return np.sqrt(Covar[0,0] + np.sin(theta_pred)**2 * Covar[1,1])
 
+
+
 def PWF_time(k_opt):
     """
     Calculate the PWF_time using the provided k_opt from PWF_semianalytical.
@@ -220,3 +222,21 @@ def PWF_time(k_opt):
     PWF_time = expected_times * 10**9
     
     return PWF_time
+
+
+
+def chi2_PWF(t_meas, t_PWF):
+    """
+    Calculates the chi-squared value for a time reconstruction - in this case a PWF :)
+
+    Args:
+        t_meas: A NumPy array of measured (or simulated) times.
+        t_PWF: A NumPy array of reconstructed times.
+
+    Returns:
+        The chi-squared value (float). 
+    """
+    sigma = np.std(t_meas, ddof=1)
+    time_diff = t_meas - t_PWF
+    chi2_value = np.sum((time_diff / sigma)**2)
+    return chi2_value
