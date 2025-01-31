@@ -199,3 +199,24 @@ def angular_error(theta_pred, Covar):
     float: absolute pointing accuracy in radians.
     """
     return np.sqrt(Covar[0,0] + np.sin(theta_pred)**2 * Covar[1,1])
+
+def PWF_time(k_opt):
+    """
+    Calculate the PWF_time using the provided k_opt from PWF_semianalytical.
+
+    Parameters:
+    k_opt (numpy array): The optimal k values from PWF_semianalytical.
+
+    Returns:
+    numpy array: The calculated PWF_time in nanoseconds.
+    """
+    # Calculate distances by projecting the difference of Xants and its mean onto k_opt
+    distances = np.dot(Xants - Xants.mean(axis=0), k_opt)
+    
+    # Calculate expected times by dividing distances by the speed of light (in meters per second)
+    expected_times = distances / c_light
+    
+    # Convert expected times to nanoseconds
+    PWF_time = expected_times * 10**9
+    
+    return PWF_time
