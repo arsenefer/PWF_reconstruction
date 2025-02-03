@@ -26,7 +26,6 @@ def mean(X:np.ndarray, sigma=None):
         return X.mean(axis=0)
     
 
-
 def cart2sph(k):
     """
     Convert cartesian coordinate to spherical coordinate
@@ -105,7 +104,7 @@ def opening_folders(cur):
     total_df = pd.merge(total_df, df_antennas, on='ant_ids', how='inner')
     return total_df
 
-def create_times(P:np.array, k, sigma, c=c_light, n=n_atm):
+def create_times(Xants:np.array, k, sigma, c=c_light, n=n_atm):
     """
     Producing antenna timings with Gaussian noise of scale $\sigma$.
 
@@ -120,7 +119,21 @@ def create_times(P:np.array, k, sigma, c=c_light, n=n_atm):
     ndarray: Theta and phi angles in radians.
     """
     assert type(k) is np.ndarray
-    P0 = mean(P, sigma)
-    T = (P-P0) @ k / (c/n)
+    P0 = mean(Xants, sigma)
+    T = (Xants-P0) @ k / (c/n)
     T += np.random.normal(0, sigma, T.shape)
     return T
+
+def chi2_PWF(t_meas, t_PWF):
+    """
+    Calculates the chi-squared value for a time reconstruction - in this case a PWF :)
+    Args:
+        t_meas: A NumPy array of measured (or simulated) times.
+        t_PWF: A NumPy array of reconstructed times.
+    Returns:
+        The chi-squared value (float). 
+    """
+    sigma = np.std(t_meas, ddof=1)
+    time_diff = t_meas - t_PWF
+    chi2_value = np.sum((time_diff / sigma)**2)
+    return chi2_value
