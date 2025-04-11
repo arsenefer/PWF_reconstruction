@@ -11,6 +11,7 @@ from scipy.stats import norm
 from .utils import R2D
 from .utils import sph2cart
 from .recons_PWF import cov_matrix
+from mpl_toolkits.mplot3d import Axes3D
 
 
 def NLL(theta_pred, phi_pred, theta, phi, estimate_cova):
@@ -20,7 +21,7 @@ def NLL(theta_pred, phi_pred, theta, phi, estimate_cova):
 
 
 def create_contour(theta_range, phi_range, theta, phi, estimate_covar, n=100):
-    thetas, phis = np.mgrid[theta_range[0]:theta_range[1]:n*1j, 
+    thetas, phis = np.mgrid[theta_range[0]:theta_range[1]:n*1j,
                             phi_range[0]:phi_range[1]:n*1j]
     pos = np.dstack((thetas, phis))
     mu = np.array([theta, phi])
@@ -43,7 +44,8 @@ def plot_distribs(theta_dis: np.ndarray,
                   phi_pred: float,
                   **kwargs):
     # Plotting histograms of predicted values
-    distrib = pd.DataFrame({"$\\phi$ $[°]$": phi_dis*R2D, "$\\theta$ $[°]$": theta_dis*R2D})
+    distrib = pd.DataFrame(
+        {"$\\phi$ $[°]$": phi_dis*R2D, "$\\theta$ $[°]$": theta_dis*R2D})
     if type(estimate_covar) is type(None):
         half_size = distrib.max().max()/2
     else:
@@ -65,24 +67,24 @@ def plot_distribs(theta_dis: np.ndarray,
     # Plotting estimated uncertainty
     if type(estimate_covar) is type(None):
         g.ax_joint.legend([blue_patch, sp], [
-                            'Error distribution', "True arrival direction"])
+            'Error distribution', "True arrival direction"])
     else:
         x00 = np.linspace(*phi_range, 100)
         y00 = norm.pdf(x00, loc=phi_pred*R2D,
-                    scale=np.sqrt(estimate_covar[1, 1])*R2D)
+                       scale=np.sqrt(estimate_covar[1, 1])*R2D)
 
         g.ax_marg_x.plot(x00, y00, c="r")
         g.ax_marg_x.plot([phi*R2D, phi*R2D], [y00.min(), y00.max()],
-                        c='b', label='True $\\phi$')
-    
+                         c='b', label='True $\\phi$')
+
         x11 = np.linspace(*theta_range, 100)
         y11 = norm.pdf(x11, loc=theta_pred*R2D,
-                    scale=np.sqrt(estimate_covar[0, 0])*R2D)
+                       scale=np.sqrt(estimate_covar[0, 0])*R2D)
 
         g.ax_marg_y.plot(y11, x11, c="r")
         g.ax_marg_y.plot([y11.min(), y11.max()], [theta*R2D,
-                        theta*R2D], c='b', label='True $\\theta$')
-        
+                                                  theta*R2D], c='b', label='True $\\theta$')
+
         thetas, phis, pdf = create_contour(
             theta_range, phi_range, theta_pred*R2D, phi_pred*R2D, estimate_covar*R2D**2)
         contour_values = np.array(
@@ -90,24 +92,22 @@ def plot_distribs(theta_dis: np.ndarray,
         # contour = np.sqrt(contour)
         CS = g.ax_joint.contour(
             phis, thetas, pdf, levels=contour_values, colors='r')
-    
+
         strs = ['68 %', '95 %', '99.5%']
         fmt = {l: s for l, s in zip(CS.levels, strs)}
         plt.clabel(CS, CS.levels[::], inline=True, fmt=fmt, fontsize=10)
         h, l = CS.legend_elements()
-        g.ax_joint.legend([blue_patch, sp, h[0]], ['Error distribution',"True arrival direction", 'Estimated distribution'], 
-                      fancybox=True, framealpha=.3,edgecolor = (0.,0.,0.), loc="lower left")
-
-
+        g.ax_joint.legend([blue_patch, sp, h[0]], ['Error distribution', "True arrival direction", 'Estimated distribution'],
+                          fancybox=True, framealpha=.3, edgecolor=(0., 0., 0.), loc="lower left")
 
     g.figure.suptitle(
         f"Estimated uncertaity distribution vs error distribution for PWF with $\\theta={theta*R2D:.1f}$°, $\\phi={phi*R2D:.1f}$°")
-    
+
     # g.ax_joint.collections[0].set_alpha(0)
     g.figure.subplots_adjust(top=0.95)
     g.figure.subplots_adjust(wspace=0)
     g.figure.subplots_adjust(hspace=0)
-    
+
     return g
 
 

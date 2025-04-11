@@ -104,7 +104,7 @@ def opening_folders(cur):
     total_df = pd.merge(total_df, df_antennas, on='ant_ids', how='inner')
     return total_df
 
-def create_times(Xants:np.array, k, sigma, c=c_light, n=n_atm):
+def create_times(Xants:np.array, k, sigma=0, c=c_light, n=n_atm):
     """
     Producing antenna timings with Gaussian noise of scale $\sigma$.
 
@@ -124,7 +124,7 @@ def create_times(Xants:np.array, k, sigma, c=c_light, n=n_atm):
     T += np.random.normal(0, sigma, T.shape)
     return T
 
-def chi2_PWF(t_meas, t_PWF):
+def chi2_PWF(t_meas, t_PWF, sigma=None):
     """
     Calculates the chi-squared value for a time reconstruction - in this case a PWF :)
     Args:
@@ -133,7 +133,25 @@ def chi2_PWF(t_meas, t_PWF):
     Returns:
         The chi-squared value (float). 
     """
-    sigma = np.std(t_meas, ddof=1)
+    if sigma is None:
+        # sigma = np.std(t_meas-t_PWF, ddof=2)  #this is bad, chi2 will always be 1
+        sigma = 1                               #Better nothing than something wrong
     time_diff = t_meas - t_PWF
     chi2_value = np.sum((time_diff / sigma)**2)
+    return chi2_value
+
+def chi2_PWF_n(t_meas, t_PWF, sigma=None):
+    """
+    Calculates the chi-squared value for a time reconstruction - in this case a PWF :)
+    Args:
+        t_meas: A NumPy array of measured (or simulated) times.
+        t_PWF: A NumPy array of reconstructed times.
+    Returns:
+        The chi-squared value (float). 
+    """
+    if sigma is None:
+        # sigma = np.std(t_meas-t_PWF, ddof=2)  #this is bad, chi2 will always be 1
+        sigma = 1                               #Better nothing than something wrong
+    time_diff = t_meas - t_PWF
+    chi2_value = np.sum((time_diff / sigma)**2)/(len(t_meas)-2)
     return chi2_value

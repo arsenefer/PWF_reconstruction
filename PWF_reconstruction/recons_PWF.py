@@ -36,7 +36,7 @@ def Linear_solver(Xants, tants, c=c_light, n=n_atm, sigma=None):
     res = M @ t_ants
     return res.flatten(), pseudoinverse
 
-
+#Write a function that plots the coords of the antennas
 def _projector(k, Inv):
     """
     Compute the projection of vector k* on the unit sphere along the largest axis of distribution.
@@ -104,10 +104,13 @@ def PWF_semianalytical(Xants, tants, verbose=False, c=c_light, n=n_atm, sigma=No
         print("Shapes of tants and Xants are incompatible", tants.shape, Xants.shape)
         return None
 
-    tants_cor = tants * c / n
     PXT = Xants - mean(Xants, sigma)[None, :]
-    A = np.dot(Xants.T, PXT)
-    b = np.dot(Xants.T, tants_cor - mean(tants_cor, sigma))
+    # PXT = PXT - mean(PXT, sigma)[None, :]   #twice for numerical stability
+    t_center = tants - mean(tants, sigma)
+    # t_center = t_center - mean(t_center, sigma) #twice for numerical stability
+    print("t_center", t_center)
+    A = np.dot(PXT.T, PXT)
+    b = np.dot(PXT.T, t_center) * c / n
     d, W = np.linalg.eigh(A)
     beta = np.dot(b, W)
     nbeta = np.linalg.norm(beta)
