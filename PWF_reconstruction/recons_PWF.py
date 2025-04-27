@@ -144,7 +144,7 @@ def PWF_semianalytical(Xants, tants, verbose=False, c=c_light, n=n_atm, sigma=No
 
     if phi_opt < 0:
         phi_opt += 2 * np.pi
-    return np.array([theta_opt, phi_opt])
+    return theta_opt, phi_opt, k_opt
 
 def cov_matrix(theta_pred, phi_pred, Xants, sigma, c=c_light, n=n_atm, method=1):
     """
@@ -202,3 +202,44 @@ def angular_error(theta_pred, Covar):
     float: absolute pointing accuracy in radians.
     """
     return np.sqrt(Covar[0,0] + np.sin(theta_pred)**2 * Covar[1,1])
+
+
+
+def PWF_time(k_opt):
+    """
+    Calculate the PWF_time using the provided k_opt from PWF_semianalytical.
+
+    Parameters:
+    k_opt (numpy array): The optimal k values from PWF_semianalytical.
+
+    Returns:
+    numpy array: The calculated PWF_time in nanoseconds.
+    """
+    # Calculate distances by projecting the difference of Xants and its mean onto k_opt
+    distances = np.dot(Xants - Xants.mean(axis=0), k_opt)
+    
+    # Calculate expected times by dividing distances by the speed of light (in meters per second)
+    expected_times = distances / c_light
+    
+    # Convert expected times to nanoseconds
+    PWF_time = expected_times * 10**9
+    
+    return PWF_time
+
+
+
+def chi2_PWF(t_meas, t_PWF):
+    """
+    Calculates the chi-squared value for a time reconstruction - in this case a PWF :)
+
+    Args:
+        t_meas: A NumPy array of measured (or simulated) times.
+        t_PWF: A NumPy array of reconstructed times.
+
+    Returns:
+        The chi-squared value (float). 
+    """
+    sigma = np.std(t_meas, ddof=1)
+    time_diff = t_meas - t_PWF
+    chi2_value = np.sum((time_diff / sigma)**2)
+    return chi2_value
